@@ -371,19 +371,16 @@ def _get_redirect_to(request):
 def _is_safe_redirect(request, redirect_to):
     """
     Determine if the given redirect URL/path is safe for redirection.
-
-    The redirect_to URL must be a safe URL. The redirect URL must also
-    be either the same domain or a subdomain of the request host domain.
     """
     request_host = request.get_host()
     request_host_domain = '.'.join(request_host.split('.')[-2:])
     redirect_to_host = urlparse.urlsplit(redirect_to).netloc
-    return (
-        # Use wildcard check to ensure redirect to the same domain or a subdomain
-        http.is_same_domain(urlparse.urlsplit(redirect_to).netloc, '.' + request_host_domain) and
-        # Checks various parts and formats of the redirect URL to ensure it is safe.
-        http.is_safe_url(redirect_to, allowed_hosts={redirect_to_host}, require_https=True)
-    )
+
+    request_host_domain_with_wildcard = '.' + request_host_domain
+    is_same_domain_or_subdomain = http.is_same_domain(redirect_to_host, request_host_domain_with_wildcard)
+    is_safe_url = http.is_safe_url(redirect_to, allowed_hosts={redirect_to_host}, require_https=True)
+
+    return is_same_domain_or_subdomain and is_safe_url
 
 
 def generate_activation_email_context(user, registration):
