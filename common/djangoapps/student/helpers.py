@@ -374,7 +374,7 @@ def _is_safe_redirect(request, redirect_to):
     """
     request_host = request.get_host()
     request_host_domain = '.'.join(request_host.split('.')[-2:])
-    redirect_to_host = urlparse.urlsplit(redirect_to).netloc
+    redirect_to_host = urlparse.urlsplit(redirect_to).netloc or request_host_domain
 
     request_host_domain_with_wildcard = '.' + request_host_domain
     is_same_domain_or_subdomain = http.is_same_domain(redirect_to_host, request_host_domain_with_wildcard)
