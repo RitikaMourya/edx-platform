@@ -15,15 +15,14 @@ from django.utils.http import cookie_date
 
 from edx_rest_framework_extensions.auth.jwt import cookies as jwt_cookies
 from openedx.core.djangoapps.user_api.accounts.utils import retrieve_last_sitewide_block_completed
+from openedx.core.djangoapps.user_authn.waffle import JWT_COOKIES_FLAG
 from student.models import CourseEnrollment
-
-from .waffle import JWT_COOKIES_FLAG
 
 
 CREATE_LOGON_COOKIE = Signal(providing_args=['user', 'response'])
 
 
-LOGGED_IN_COOKIE_NAMES = (
+JWT_COOKIE_NAMES = (
     # Header and payload sections of a JSON Web Token containing user
     # information and used as an access token.
     jwt_cookies.jwt_cookie_header_payload_name(),
@@ -33,8 +32,10 @@ LOGGED_IN_COOKIE_NAMES = (
 
     # Refresh token, which can be used to get a new JSON Web Token.
     jwt_cookies.jwt_refresh_cookie_name(),
+)
 
-    # TODO (ARCH-245): Remove the following deprecated cookies.
+# TODO (ARCH-245): Remove the following deprecated cookies.
+DEPRECATED_LOGGED_IN_COOKIE_NAMES = (
     # Set to 'true' if the user is logged in.
     settings.EDXMKTG_LOGGED_IN_COOKIE_NAME,
 
@@ -42,16 +43,15 @@ LOGGED_IN_COOKIE_NAMES = (
     settings.EDXMKTG_USER_INFO_COOKIE_NAME,
 )
 
+ALL_LOGGED_IN_COOKIE_NAMES = JWT_COOKIE_NAMES + DEPRECATED_LOGGED_IN_COOKIE_NAMES
+
 
 def is_logged_in_cookie_set(request):
-    """Check whether the request has logged in cookies set. """
+    """ Check whether the request has logged in cookies set. """
     if JWT_COOKIES_FLAG.is_enabled():
-        expected_cookie_names = LOGGED_IN_COOKIE_NAMES
+        expected_cookie_names = ALL_LOGGED_IN_COOKIE_NAMES
     else:
-        expected_cookie_names = (
-            settings.EDXMKTG_LOGGED_IN_COOKIE_NAME,
-            settings.EDXMKTG_USER_INFO_COOKIE_NAME,
-        )
+        expected_cookie_names = DEPRECATED_LOGGED_IN_COOKIE_NAMES
 
     return all(
         cookie_name in request.COOKIES
@@ -67,7 +67,7 @@ def delete_logged_in_cookies(response):
     Returns:
         HttpResponse
     """
-    for cookie_name in LOGGED_IN_COOKIE_NAMES:
+    for cookie_name in ALL_LOGGED_IN_COOKIE_NAMES:
         response.delete_cookie(
             cookie_name.encode('utf-8'),
             path='/',
@@ -85,7 +85,7 @@ def standard_cookie_settings(request):
         expires = None
     else:
         max_age = request.session.get_expiry_age()
-        expires = _cookie_expires_from_max_age(max_age)
+        expires = _cookie_expiration_based_on_max_age(max_age)
 
     cookie_settings = {
         'max_age': max_age,
@@ -111,7 +111,7 @@ def standard_cookie_settings(request):
 
 def set_logged_in_cookies(request, response, user):
     """
-    Set cookies at the time of user login. See LOGGED_IN_COOKIE_NAMES to see
+    Set cookies at the time of user login. See ALL_LOGGED_IN_COOKIE_NAMES to see
     which cookies are set.
 
     Arguments:
@@ -186,11 +186,11 @@ def _set_jwt_cookies(response, request, user):  # pylint: disable=unused-argumen
     """ Sets a cookie containing a JWT on the response. """
     if not JWT_COOKIES_FLAG.is_enabled():
         return
-    # TODO
+    # TODO (ARCH-236)
 
 
 def _get_user_info_cookie_data(request, user):
-    """ Returns information that wil populate the user info cookie. """
+    """ Returns information that will populate the user info cookie. """
 
     # Set a cookie with user info.  This can be used by external sites
     # to customize content based on user information.  Currently,
@@ -229,6 +229,6 @@ def _get_user_info_cookie_data(request, user):
     return user_info
 
 
-def _cookie_expires_from_max_age(max_age):
+def _cookie_expiration_based_on_max_age(max_age):
     expires_time = time.time() + max_age
     return cookie_date(expires_time)
